@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cyber Defense Dashboard - 209.74.64.184</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/globe.gl@2.24.0/dist/globe.gl.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --primary: #3498db;
+            --danger: #e74c3c;
+            --warning: #f39c12;
+            --success: #2ecc71;
+            --dark: #2c3e50;
+            --light: #ecf0f1;
+        }
+        
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #121212;
+            color: #ffffff;
+            overflow-x: hidden;
+        }
+        
+        #app-container {
+            display: grid;
+            grid-template-columns: 3fr 1fr;
+            grid-gap: 20px;
+            padding: 20px;
+            height: 100vh;
+        }
+        
+        #globe-container {
+            grid-column: 1;
+            grid-row: 1 / span 2;
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 10px;
+            overflow: hidden;
+            height: calc(100vh - 40px);
+        }
+        
+        #control-panel {
+            grid-column: 2;
+            grid-row: 1;
+            background: rgba(30, 30, 45, 0.9);
+            border-radius: 10px;
+            padding: 20px;
+            backdrop-filter: blur(5px);
+            border: 1px solid #444;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        
+        #stats-container {
+            grid-column: 2;
+            grid-row: 2;
+            background: rgba(30, 30, 45, 0.9);
+            border-radius: 10px;
+            padding: 20px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+        
+        .stat-card {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 28px;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        
+        .stat-label {
+            font-size: 14px;
+            opacity: 0.8;
+        }
+        
+        .card {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+        
+        .card-title {
+            font-size: 18px;
+            margin-top: 0;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #444;
+        }
+        
+        #attack-log {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .attack-entry {
+            padding: 10px;
+            margin: 8px 0;
+            border-radius: 5px;
+            background: rgba(0, 0, 0, 0.2);
+            border-left: 3px solid var(--danger);
+            font-size: 13px;
+            transition: all 0.3s;
+        }
+        
+        .attack-entry:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+        
+        .attack-time {
+            color: var(--primary);
+            font-weight: bold;
+        }
+        
+        .attack-ip {
+            color: var(--warning);
+        }
+        
+        .attack-country {
+            color: var(--success);
+        }
+        
+        #blocked-ips-list {
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        .blocked-ip-entry {
+            padding: 8px;
+            margin: 5px 0;
+            background: rgba(255, 0, 0, 0.1);
+            border-radius: 5px;
+            font-size: 13px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .ip-actions button {
+            border: none;
+            padding: 3px 8px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+            margin-left: 5px;
+        }
+        
+        .unblock-btn {
+            background: var(--success);
+            color: white;
+        }
+        
+        .block-btn {
+            background: var(--danger);
+            color: white;
+        }
+        
+        #chart-container {
+            width: 100%;
+            height: 200px;
+        }
+        
+        .server-info {
+            color: var(--primary);
+            font-weight: bold;
+        }
+        
+        /* Tooltip styles */
+        .tooltip {
+            position: relative;
+            display: inline-block;
+        }
+        
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            width: 200px;
+            background-color: #333;
+            color: #fff;
+            text-align: center;
+            border-radius: 6px;
+            padding: 5px;
+            position: absolute;
+            z-index: 1;
+            bottom: 125%;
+            left: 50%;
+            transform: translateX(-50%);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <div id="app-container">
+        <div id="globe-container"></div>
+        
+        <div id="control-panel">
+            <div class="card">
+                <h3 class="card-title">Server Information</h3>
+                <p>Host: <span class="server-info">production-server-01</span></p>
+                <p>IP: <span class="server-info">209.74.64.184</span></p>
+                <p>Status: <span class="server-info" style="color: var(--success)">Online</span></p>
+            </div>
+            
+            <div class="card">
+                <h3 class="card-title">Threat Defense System</h3>
+                <div id="defense-stats">
+                    <p>Active blocks: <span id="active-blocks">0</span></p>
+                    <p>Recent attacks: <span id="total-attacks">0</span></p>
+                    <p>Auto-blocks (24h): <span id="auto-blocks">0</span></p>
+                </div>
+            </div>
+            
+            <div class="card">
+                <h3 class="card-title">Blocked IPs <button id="refresh-blocks" style="float: right; padding: 2px 8px; font-size: 12px;">Refresh</button></h3>
+                <div id="blocked-ips-list">
+                    <!-- Blocked IPs will appear here -->
+                </div>
+            </div>
+        </div>
+        
+        <div id="stats-container">
+            <div class="stat-card">
+                <div class="stat-label">TOTAL ATTACKS</div>
+                <div class="stat-value" id="stat-attacks">0</div>
+                <div class="stat-label">Last 24 hours</div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-label">BLOCKED IPS</div>
+                <div class="stat-value" id="stat-blocks">0</div>
+                <div class="stat-label">Currently active</div>
+            </div>
+            
+            <div class="stat-card" style="grid-column: span 2;">
+                <div class="stat-label">ATTACK FREQUENCY</div>
+                <div id="chart-container">
+                    <canvas id="attack-chart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        const attackHistory = [];
+        const blockedIPs = {};
+        const attackData = {
+            counts: Array(24).fill(0),
+            labels: Array(24).fill(0).map((_, i) => `${i}:00`)
+        };
+        let globe, attackChart;
+        
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', async function() {
+            // Initialize globe
+            initGlobe();
+            
+            // Initialize chart
+            initChart();
+            
+            // Load initial data
+            await loadInitialData();
+            
+            // Start SSE connection for real-time updates
+            setupSSE();
+            
+            // Set up UI event listeners
+            document.getElementById('refresh-blocks').addEventListener('click', refreshBlockedIPs);
+        });
+        
+        // Initialize the 3D globe
+        function initGlobe() {
+            globe = Globe()
+                .globeImageUrl('https://unpkg.com/three-globe/example/img/earth-dark.jpg')
+                .bumpImageUrl('https://unpkg.com/three-globe/example/img/earth-topology.png')
+                .backgroundImageUrl('https://unpkg.com/three-globe/example/img/night-sky.png')
+                .showAtmosphere(true)
+                .atmosphereColor('#3a228a')
+                .atmosphereAltitude(0.15)
+                .pointOfView({ lat: 20, lng: 0, altitude: 1.8 })
+                .pointsMerge(true)
+                .arcsTransitionDuration(1000)
+                .arcDashLength(0.5)
+                .arcDashGap(1)
+                .arcDashInitialGap(() => Math.random())
+                .arcDashAnimateTime(4000)
+                .arcColor(() => ['#ff3d3d', '#ffcc00'])
+                (document.getElementById('globe-container'));
+            
+            // Add server location
+            addServerLocation();
+        }
+        
+        // Add server location to globe
+        function addServerLocation() {
+            const serverLocation = {
+                lat: 6.9271,
+                lng: 79.8612,
+                label: 'Production Server (209.74.64.184)'
+            };
+            
+            globe.pointsData([{
+                lat: serverLocation.lat,
+                lng: serverLocation.lng,
+                size: 18,
+                color: '#00ffff',
+                label: serverLocation.label
+            }]);
+        }
+        
+        // Initialize the attack frequency chart
+        function initChart() {
+            const ctx = document.getElementById('attack-chart').getContext('2d');
+            attackChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: attackData.labels,
+                    datasets: [{
+                        label: 'Attack Attempts',
+                        data: attackData.counts,
+                        borderColor: 'rgba(255, 99, 132, 1)',
+                        backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)'
+                            },
+                            ticks: {
+                                color: 'rgba(255, 255, 255, 0.7)'
+                            }
+                        },
+                        x: {
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)'
+                            },
+                            ticks: {
+                                color: 'rgba(255, 255, 255, 0.7)'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Load initial attack history and blocked IPs
+        async function loadInitialData() {
+            try {
+                // Load attack history
+                const historyRes = await fetch('http://209.74.64.184:5000/api/history');
+                const history = await historyRes.json();
+                history.forEach(attack => processAttack(attack));
+                
+                // Load blocked IPs
+                await refreshBlockedIPs();
+                
+            } catch (err) {
+                console.error('Failed to load initial data:', err);
+            }
+        }
+        
+        // Set up Server-Sent Events connection
+        function setupSSE() {
+            const eventSource = new EventSource('http://209.74.64.184:5000/api/ssh-stream');
+            
+            eventSource.onmessage = function(e) {
+                try {
+                    const attack = JSON.parse(e.data);
+                    processAttack(attack);
+                } catch (err) {
+                    console.warn('Error parsing SSE data:', err);
+                }
+            };
+            
+            eventSource.onerror = function() {
+                console.error('SSE connection error');
+            };
+        }
+        
+        // Process an attack event
+        function processAttack(attack) {
+            // Add to attack history
+            attackHistory.push(attack);
+            
+            // Update attack counts
+            const now = new Date();
+            const hour = now.getHours();
+            attackData.counts[hour] = (attackData.counts[hour] || 0) + 1;
+            
+            // Update statistics
+            updateStatistics();
+            
+            // Update globe visualization
+            updateGlobe();
+            
+            // Update chart
+            updateChart();
+            
+            // Add to attack log UI
+            addAttackToUI(attack);
+        }
+        
+        // Update statistics display
+        function updateStatistics() {
+            document.getElementById('stat-attacks').textContent = attackHistory.length;
+            document.getElementById('total-attacks').textContent = attackHistory.length;
+            document.getElementById('active-blocks').textContent = Object.keys(blockedIPs).length;
+            document.getElementById('stat-blocks').textContent = Object.keys(blockedIPs).length;
+        }
+        
+        // Update globe visualization
+        function updateGlobe() {
+            const attackPoints = attackHistory.slice(-50).map(attack => ({
+                lat: attack.lat,
+                lng: attack.lng,
+                size: 8,
+                color: attack.blocked ? '#ff0000' : '#ff9900',
+                label: `${attack.ip} (${attack.country}) - ${attack.attempts} attempts`
+            }));
+            
+            // Add server location
+            attackPoints.push({
+                lat: 6.9271,
+                lng: 79.8612,
+                size: 18,
+                color: '#00ffff',
+                label: 'Production Server (209.74.64.184)'
+            });
+            
+            globe.pointsData(attackPoints);
+            
+            const attackArcs = attackHistory.slice(-50).map(attack => ({
+                startLat: attack.lat,
+                startLng: attack.lng,
+                endLat: 6.9271,
+                endLng: 79.8612,
+                color: attack.blocked ? ['#ff0000', '#ff5555'] : ['#ff9900', '#ffcc00'],
+                label: `Attack from ${attack.country}`
+            }));
+            
+            globe.arcsData(attackArcs);
+        }
+        
+        // Update the attack chart
+        function updateChart() {
+            attackChart.data.datasets[0].data = attackData.counts;
+            attackChart.update();
+        }
+        
+        // Add an attack to the UI log
+        function addAttackToUI(attack) {
+            const attackLog = document.getElementById('blocked-ips-list');
+            const attackEntry = document.createElement('div');
+            attackEntry.className = 'attack-entry';
+            attackEntry.innerHTML = `
+                <div>
+                    <span class="attack-time">${new Date(attack.timestamp).toLocaleTimeString()}</span><br>
+                    <span class="attack-ip">${attack.ip}</span> 
+                    <span class="attack-country">(${attack.country})</span><br>
+                    <small>${attack.event} - Attempt ${attack.attempts}</small>
+                </div>
+                <div class="ip-actions">
+                    ${attack.blocked ? 
+                        `<button class="unblock-btn" data-ip="${attack.ip}">Unblock</button>` : 
+                        `<button class="block-btn" data-ip="${attack.ip}">Block</button>`}
+                </div>
+            `;
+            
+            attackLog.prepend(attackEntry);
+            
+            // Add event listener to buttons
+            if (attack.blocked) {
+                attackEntry.querySelector('.unblock-btn').addEventListener('click', unblockIP);
+            } else {
+                attackEntry.querySelector('.block-btn').addEventListener('click', blockIP);
+            }
+            
+            // Limit log size
+            if (attackLog.children.length > 50) {
+                attackLog.removeChild(attackLog.lastChild);
+            }
+        }
+        
+        // Refresh the blocked IPs list
+        async function refreshBlockedIPs() {
+            try {
+                const res = await fetch('http://209.74.64.184:5000/api/blocked');
+                const data = await res.json();
+                
+                // Update blocked IPs object
+                data.blocked_ips.forEach(blocked => {
+                    blockedIPs[blocked.ip] = blocked;
+                });
+                
+                // Update UI
+                updateBlockedIPsUI(data.blocked_ips);
+                
+                // Update statistics
+                document.getElementById('active-blocks').textContent = data.blocked_ips.length;
+                document.getElementById('stat-blocks').textContent = data.blocked_ips.length;
+                
+            } catch (err) {
+                console.error('Failed to refresh blocked IPs:', err);
+            }
+        }
+        
+        // Update the blocked IPs UI list
+        function updateBlockedIPsUI(blockedIPs) {
+            const blockedList = document.getElementById('blocked-ips-list');
+            blockedList.innerHTML = '';
+            
+            if (blockedIPs.length === 0) {
+                blockedList.innerHTML = '<div class="attack-entry">No IPs currently blocked</div>';
+                return;
+            }
+            
+            blockedIPs.forEach(blocked => {
+                const entry = document.createElement('div');
+                entry.className = 'blocked-ip-entry';
+                entry.innerHTML = `
+                    <div>
+                        <strong>${blocked.ip}</strong><br>
+                        <small>Blocked at ${blocked.time_blocked}</small><br>
+                        <small>Auto-unblock in: ${blocked.time_remaining}</small>
+                    </div>
+                    <div class="ip-actions">
+                        <button class="unblock-btn" data-ip="${blocked.ip}">Unblock</button>
+                    </div>
+                `;
+                blockedList.appendChild(entry);
+                
+                // Add event listener to unblock button
+                entry.querySelector('.unblock-btn').addEventListener('click', unblockIP);
+            });
+        }
+        
+        // Block an IP address
+        async function blockIP(e) {
+            const ip = e.target.dataset.ip;
+            
+            try {
+                const res = await fetch(`http://209.74.64.184:5000/api/block/${ip}`, {
+                    method: 'POST'
+                });
+                
+                const data = await res.json();
+                
+                if (data.success) {
+                    await refreshBlockedIPs();
+                } else {
+                    alert(`Failed to block IP: ${data.error || 'Unknown error'}`);
+                }
+            } catch (err) {
+                console.error('Error blocking IP:', err);
+                alert('Failed to block IP');
+            }
+        }
+        
+        // Unblock an IP address
+        async function unblockIP(e) {
+            const ip = e.target.dataset.ip;
+            
+            try {
+                const res = await fetch(`http://209.74.64.184:5000/api/unblock/${ip}`, {
+                    method: 'POST'
+                });
+                
+                const data = await res.json();
+                
+                if (data.success) {
+                    await refreshBlockedIPs();
+                } else {
+                    alert(`Failed to unblock IP: ${data.error || 'Unknown error'}`);
+                }
+            } catch (err) {
+                console.error('Error unblocking IP:', err);
+                alert('Failed to unblock IP');
+            }
+        }
+    </script>
+</body>
+</html>
